@@ -1,0 +1,113 @@
+---
+title: "Repro R PA1"
+output: html_document
+---
+```
+```{r, echo = TRUE}
+getwd()
+```
+
+Download the file
+```{r, echo=TRUE}
+download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip","Activity")
+```
+Examine Data file
+Note 1st column is steps, 2nd is date (YYYY-MM-DD format), and 3d is 5 minute time interval
+```{r, echo=TRUE}
+activity <- read.csv("C:/Users/owner/Documents/Coursera/activity.csv",stringsAsFactors =F)
+str(activity)
+```
+Note the data is measured for 61 days
+Must convert dates from strings to dates
+```{r, echo=TRUE}
+activity$date <- as.Date(activity$date)
+activity$steps <- as.numeric(activity$steps)
+```
+Q2 What is the mean total number of steps per day?
+```{r, echo=TRUE}
+library(dplyr)
+steps.per.day <- group_by(activity,date)
+steps.total <- summarize(steps.per.day, Total_Steps = sum(steps,na.rm=T))
+hist(steps.total$Total_Steps, main = "Steps Per Day", xlab = "Total Steps")
+summary(steps.total)
+```
+The Median is 10,395 and the mean is 9354 steps per day
+
+Q3. What is the average daily activity pattern?
+```{r, echo=TRUE}
+steps.per.interval <- group_by(activity,interval)
+avg.steps <- summarize(steps.per.interval, Average_Steps = mean(steps,na.rm=T))
+plot(avg.steps, type ="l")
+```
+Find max level of steps
+```{r, echo=TRUE}
+summary(avg.steps)
+```
+Max level of  average steps is 206.170. Find which interval that is?
+```{r, echo=TRUE}
+ a <- arrange (avg.steps,desc(Average_Steps))
+head(a)
+```
+Interval 835 has the highest average # of steps
+
+Q4. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r, echo=TRUE}
+sum(is.na(activity$steps))
+```
+ Devise a strategy for "filling in" NA values. I choose to use the mean value for that 5 minute interval.
+First, create a vector of average steps taken for all 5 minute intervals in the activity df.
+Recall avg.steps has the average for each 5 minute interval in a day, and there are 61 days
+```{r, echo=TRUE}
+avg.step.v <- (rep(avg.steps$Average_Steps, times = 61))
+```
+Add avg step vector to df, then replace NA's with corresponding interval averages
+```{r, echo=TRUE}
+filled.activity <- cbind(activity,avg.step.v)
+filled.activity$steps[is.na(filled.activity$steps)] <- filled.activity$avg.step.v[is.na(filled.activity$steps)]
+```
+ Plot histogram of steps per day and calculate mean and median as before, only using "filled" data
+ ```{r, echo=TRUE}
+steps.per.day.f <- group_by(filled.activity,date)
+steps.total.f <- summarize(steps.per.day.f, Total_Steps_F = sum(steps))
+hist(steps.total.f$Total_Steps_F, main = "Steps Per Day Using Filled Data", xlab = "Total Steps")
+summary(steps.total.f)
+```
+ Replacing NA's with interval means, made the meadian go up a bit, and the mean increase even more. The interesting
+result is that now the mean and median are equal! This smoothed out the data, not sure about the accuracy?
+```{r, echo=TRUE}
+summary(steps.total)
+```
+A cursory look at the quartiles indicate the filling NA's also pushed some of the sample distribution from
+ the first quartile to the mean while leaving thre upper quartiles unaffected. So it appears the variance is
+ reduced a bit . This is not surprising considered NA's were replaced by means in this example
+ 
+Q5.Are there differences in activity patterns between weekdays and weekends?
+ Convert dates to weekdays, then to a factor of weekday or weekend.
+ ```{r, echo=TRUE}
+wd <- weekdays(filled.activity$date)
+fwd <- as.factor(ifelse(wd %in% c("Saturday", "Sunday"), "Weekend", "Weekday"))
+```
+
+Add new factor to filled df
+```{r, echo=TRUE}
+f.activty.we <- cbind(filled.activity,fwd)
+str(f.activty.we)
+```
+Filter into two diff df's for Weekend or Weekday
+```{r, echo=TRUE}
+We.activity <- filter(f.activty.we, fwd == "Weekend")
+Wd.activity <- filter(f.activty.we, fwd == "Weekday")
+```
+Group by interval and compute mean steps
+```{r, echo=TRUE}
+We.steps.per.interval <- group_by(We.activity,interval)
+We.avg.steps <- summarize(We.steps.per.interval, Average_Steps_We = mean(steps))
+Wd.steps.per.interval <- group_by(Wd.activity,interval)
+Wd.avg.steps <- summarize(Wd.steps.per.interval, Average_Steps = mean(steps))
+```
+ Create Panel of 2 seperate plots for Average Steps per interval, for Weekends and Weekdays.
+ ```{r, echo=TRUE}
+par(mfrow=c(2,1))
+plot(We.avg.steps, type ="l", main = "Weekend")
+plot(Wd.avg.steps, type ="l", main = "Weekday")
+```
